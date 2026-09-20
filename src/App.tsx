@@ -3,7 +3,7 @@ import { Arena } from './pages/Arena';
 import { Leaderboard } from './pages/Leaderboard';
 import { Admin } from './pages/Admin';
 import { TermsGate } from './components/TermsGate';
-import { hasAcceptedTerms, setAcceptedTerms } from './lib/voter';
+import { hasAcceptedTerms, setAcceptedTerms } from './lib/terms';
 
 type View = 'arena' | 'leaderboard' | 'admin';
 

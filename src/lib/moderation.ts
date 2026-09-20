@@ -1,6 +1,8 @@
-// Lightweight acceptable-use guard for the roster. NameMash is scoped to
+// Client-side mirror of the acceptable-use guard: NameMash is scoped to
 // fictional names, baby-name shortlists, brand names, and similar
 // non-personal contenders — never real people rated without consent.
+// The database also enforces a length check and a UNIQUE constraint on
+// name, so this is a first line of defense, not the only one.
 const EMAIL_RE = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i;
 const PHONE_RE = /\b\d[\d\s.-]{6,}\d\b/;
 const LONG_DIGIT_RUN_RE = /\d{5,}/;
@@ -9,8 +11,8 @@ const PII_KEYWORDS = [
   'classmate', 'class roster', 'my school', 'real name',
 ];
 
-export function validateContenderName(rawName) {
-  const name = (rawName ?? '').trim();
+export function validateContenderName(rawName: string): { ok: true; name: string } | { ok: false; reason: string } {
+  const name = rawName.trim();
 
   if (name.length === 0) {
     return { ok: false, reason: 'Name is required.' };
@@ -31,11 +33,8 @@ export function validateContenderName(rawName) {
   return { ok: true, name };
 }
 
-export function validateCategory(rawCategory) {
-  if (rawCategory == null || rawCategory === '') return { ok: true, category: null };
-  const category = String(rawCategory).trim();
-  if (category.length > 40) {
-    return { ok: false, reason: 'Category must be 40 characters or fewer.' };
-  }
-  return { ok: true, category };
+export function sanitizeCategory(rawCategory: string): string | null {
+  const category = rawCategory.trim();
+  if (category.length === 0) return null;
+  return category.slice(0, 40);
 }

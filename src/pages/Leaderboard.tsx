@@ -1,45 +1,67 @@
-import { useCallback, useEffect, useState } from 'react';
-import { api } from '../lib/api';
-import { socket } from '../lib/socket';
-import type { Contender, Tier } from '../lib/types';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { fetchLeaderboard, extractCategories, subscribeToContenders } from '../lib/contenders';
+import { assignTiers } from '../lib/tiers';
+import type { Contender, ContenderRow, Tier } from '../lib/types';
 import { TierBadge } from '../components/TierBadge';
 
 const TIERS: Tier[] = ['S', 'A', 'B', 'C', 'D'];
 const PODIUM = ['🥇', '🥈', '🥉'];
 
 export function Leaderboard() {
-  const [items, setItems] = useState<Contender[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
+  const [allItems, setAllItems] = useState<Contender[]>([]);
   const [category, setCategory] = useState('');
   const [tier, setTier] = useState('');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [flashes, setFlashes] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
-    const [rows, cats] = await Promise.all([
-      api.getItems({ category: category || undefined, tier: tier || undefined, search: search || undefined }),
-      api.getCategories(),
-    ]);
-    setItems(rows);
-    setCategories(cats);
+    const rows = assignTiers(await fetchLeaderboard());
+    setAllItems(rows);
     setLoading(false);
-  }, [category, tier, search]);
+  }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
+  const flashTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
   useEffect(() => {
-    function onUpdate() {
+    const unsubscribe = subscribeToContenders((payload: RealtimePostgresChangesPayload<ContenderRow>) => {
       load();
-    }
-    socket.on('leaderboard:update', onUpdate);
-    socket.on('roster:update', onUpdate);
-    return () => {
-      socket.off('leaderboard:update', onUpdate);
-      socket.off('roster:update', onUpdate);
-    };
+
+      if (payload.eventType === 'UPDATE') {
+        const oldRating = payload.old?.smash_rating;
+        const newRating = payload.new?.smash_rating;
+        const id = payload.new?.id;
+        if (id && typeof oldRating === 'number' && typeof newRating === 'number') {
+          const delta = Math.round((newRating - oldRating) * 100) / 100;
+          if (delta !== 0) {
+            setFlashes((prev) => ({ ...prev, [id]: delta }));
+            clearTimeout(flashTimers.current[id]);
+            flashTimers.current[id] = setTimeout(() => {
+              setFlashes((prev) => {
+                const next = { ...prev };
+                delete next[id];
+                return next;
+              });
+            }, 2000);
+          }
+        }
+      }
+    });
+    return unsubscribe;
   }, [load]);
+
+  const categories = extractCategories(allItems);
+  const items = allItems.filter((item) => {
+    if (category && item.category !== category) return false;
+    if (tier && item.tier !== tier) return false;
+    if (search && !item.name.toLowerCase().includes(search.toLowerCase())) return false;
+    return true;
+  });
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
@@ -101,7 +123,12 @@ export function Leaderboard() {
             </thead>
             <tbody>
               {items.map((item, index) => (
-                <tr key={item.id} className="border-t border-neutral-800 hover:bg-neutral-900/60">
+                <tr
+                  key={item.id}
+                  className={`border-t border-neutral-800 transition-colors hover:bg-neutral-900/60 ${
+                    flashes[item.id] !== undefined ? 'bg-mash-red/10' : ''
+                  }`}
+                >
                   <td className="px-4 py-3 font-semibold text-neutral-300">
                     {PODIUM[index] ?? `#${item.rank ?? index + 1}`}
                   </td>
@@ -114,12 +141,18 @@ export function Leaderboard() {
                   </td>
                   <td className="px-4 py-3 text-right font-mono text-neutral-200">
                     {Math.round(item.smashRating)}
+                    {flashes[item.id] !== undefined && (
+                      <span className={`ml-2 text-xs font-bold ${flashes[item.id] >= 0 ? 'text-emerald-400' : 'text-red-500'}`}>
+                        {flashes[item.id] >= 0 ? '+' : ''}
+                        {flashes[item.id]}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-400">
                     {item.wins}-{item.losses}
                   </td>
                   <td className="px-4 py-3 text-right text-neutral-400">{Math.round(item.winRate * 100)}%</td>
-                  <td className="px-4 py-3 text-right text-neutral-400">{item.totalSmashes}</td>
+                  <td className="px-4 py-3 text-right text-neutral-400">{item.totalMatches}</td>
                 </tr>
               ))}
               {items.length === 0 && (

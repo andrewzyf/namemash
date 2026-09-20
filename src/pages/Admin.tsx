@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../lib/api';
-import { socket } from '../lib/socket';
+import { fetchLeaderboard, addContender, seedRosterIfEmpty, subscribeToContenders } from '../lib/contenders';
+import { validateContenderName, sanitizeCategory } from '../lib/moderation';
 import type { Contender } from '../lib/types';
-import { hasAcceptedTerms, setAcceptedTerms } from '../lib/voter';
+import { hasAcceptedTerms, setAcceptedTerms } from '../lib/terms';
 
 export function Admin() {
   const [items, setItems] = useState<Contender[]>([]);
   const [name, setName] = useState('');
   const [category, setCategory] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [termsAccepted, setTermsAccepted] = useState(hasAcceptedTerms());
+  const [seeding, setSeeding] = useState(false);
 
   const load = useCallback(async () => {
-    setItems(await api.getItems());
+    setItems(await fetchLeaderboard());
   }, []);
 
   useEffect(() => {
@@ -20,48 +22,47 @@ export function Admin() {
   }, [load]);
 
   useEffect(() => {
-    function onUpdate() {
-      load();
-    }
-    socket.on('roster:update', onUpdate);
-    socket.on('leaderboard:update', onUpdate);
-    return () => {
-      socket.off('roster:update', onUpdate);
-      socket.off('leaderboard:update', onUpdate);
-    };
+    const unsubscribe = subscribeToContenders(() => load());
+    return unsubscribe;
   }, [load]);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setInfo(null);
     if (!termsAccepted) {
       setError('You must accept the acceptable-use terms below before adding a contender.');
       return;
     }
+    const nameCheck = validateContenderName(name);
+    if (!nameCheck.ok) {
+      setError(nameCheck.reason);
+      return;
+    }
     try {
-      await api.addContender(name, category || null, true);
+      await addContender(nameCheck.name, sanitizeCategory(category));
       setName('');
       setCategory('');
+      setInfo(`Added "${nameCheck.name}" to the roster.`);
       load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add contender.');
     }
   }
 
-  async function handleRemove(id: string) {
-    await api.deleteContender(id);
-    load();
-  }
-
-  async function handleReset(id: string) {
-    await api.resetContender(id);
-    load();
-  }
-
-  async function handleResetAll() {
-    if (!confirm('Reset every contender to 1500 Smashes and clear all records?')) return;
-    await api.resetAll();
-    load();
+  async function handleSeed() {
+    setSeeding(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const added = await seedRosterIfEmpty();
+      setInfo(added > 0 ? `Seeded ${added} placeholder contenders.` : 'Roster already has contenders — seed skipped.');
+      load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to seed roster.');
+    } finally {
+      setSeeding(false);
+    }
   }
 
   return (
@@ -103,14 +104,16 @@ export function Admin() {
         </label>
 
         {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+        {info && <p className="mt-2 text-sm text-emerald-400">{info}</p>}
       </form>
 
       <div className="mb-4 flex justify-end">
         <button
-          onClick={handleResetAll}
-          className="rounded-lg border border-neutral-700 px-4 py-2 text-xs text-neutral-400 hover:border-red-500 hover:text-red-400"
+          onClick={handleSeed}
+          disabled={seeding}
+          className="rounded-lg border border-neutral-700 px-4 py-2 text-xs text-neutral-400 hover:border-neutral-500 hover:text-neutral-200 disabled:opacity-40"
         >
-          Reset All Ratings
+          {seeding ? 'Seeding…' : 'Seed Placeholder Roster (if empty)'}
         </button>
       </div>
 
@@ -121,7 +124,7 @@ export function Admin() {
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Category</th>
               <th className="px-4 py-3 text-right">Score</th>
-              <th className="px-4 py-3 text-right">Actions</th>
+              <th className="px-4 py-3 text-right">Record</th>
             </tr>
           </thead>
           <tbody>
@@ -132,16 +135,18 @@ export function Admin() {
                 <td className="px-4 py-3 text-right font-mono text-neutral-300">
                   {Math.round(item.smashRating)}
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <button onClick={() => handleReset(item.id)} className="mr-3 text-xs text-neutral-400 hover:text-neutral-100">
-                    Reset
-                  </button>
-                  <button onClick={() => handleRemove(item.id)} className="text-xs text-red-400 hover:text-red-300">
-                    Remove
-                  </button>
+                <td className="px-4 py-3 text-right text-neutral-400">
+                  {item.wins}-{item.losses}
                 </td>
               </tr>
             ))}
+            {items.length === 0 && (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-neutral-500">
+                  Roster is empty — seed it or add a contender above.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

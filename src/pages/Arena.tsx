@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '../lib/api';
-import { socket } from '../lib/socket';
-import { getVoterId } from '../lib/voter';
-import type { Contender } from '../lib/types';
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { fetchLeaderboard, castVote, subscribeToContenders } from '../lib/contenders';
+import { assignTiers } from '../lib/tiers';
+import { pickPair } from '../lib/matchmaking';
+import type { Contender, ContenderRow } from '../lib/types';
 import { ContenderCard } from '../components/ContenderCard';
 
 type Delta = { id: number; value: number } | null;
@@ -15,13 +16,23 @@ export function Arena() {
   const [pulsing, setPulsing] = useState<'left' | 'right' | null>(null);
   const [deltas, setDeltas] = useState<{ left: Delta; right: Delta }>({ left: null, right: null });
   const deltaCounter = useRef(0);
-  const voterId = useRef(getVoterId());
+  const pairRef = useRef<Contender[] | null>(null);
+
+  useEffect(() => {
+    pairRef.current = pair;
+  }, [pair]);
 
   const loadPair = useCallback(async (excludeIds: string[] = []) => {
     setLoading(true);
     setError(null);
     try {
-      const next = await api.getNextPair(excludeIds);
+      const roster = assignTiers(await fetchLeaderboard());
+      const next = pickPair(roster, excludeIds);
+      if (!next) {
+        setError('Not enough active contenders to build a matchup. Add more in Roster.');
+        setPair(null);
+        return;
+      }
       setPair(next);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load a matchup.');
@@ -43,12 +54,12 @@ export function Arena() {
       setPulsing(winnerIndex === 0 ? 'left' : 'right');
 
       try {
-        const result = await api.vote(winner.id, loser.id, voterId.current);
+        const result = await castVote(winner.id, loser.id);
         deltaCounter.current += 1;
         const id = deltaCounter.current;
         setDeltas({
-          left: winnerIndex === 0 ? { id, value: result.winnerDelta } : { id, value: result.loserDelta },
-          right: winnerIndex === 1 ? { id, value: result.winnerDelta } : { id, value: result.loserDelta },
+          left: winnerIndex === 0 ? { id, value: result.winner_delta } : { id, value: result.loser_delta },
+          right: winnerIndex === 1 ? { id, value: result.winner_delta } : { id, value: result.loser_delta },
         });
 
         setTimeout(async () => {
@@ -84,15 +95,33 @@ export function Arena() {
     return () => window.removeEventListener('keydown', onKey);
   }, [smash, skip]);
 
+  // Live cross-device feedback: if someone elsewhere smashes a contender
+  // that's currently on screen here, flash its updated score + delta
+  // without disrupting the local voting flow.
   useEffect(() => {
-    function onExternalUpdate() {
-      // Another voter changed ratings; nothing to do for the current pair —
-      // the leaderboard page listens separately for live standings.
-    }
-    socket.on('leaderboard:update', onExternalUpdate);
-    return () => {
-      socket.off('leaderboard:update', onExternalUpdate);
-    };
+    const unsubscribe = subscribeToContenders((payload: RealtimePostgresChangesPayload<ContenderRow>) => {
+      if (payload.eventType !== 'UPDATE' || !pairRef.current) return;
+      const updatedId = payload.new?.id;
+      const sideIndex = pairRef.current.findIndex((c) => c.id === updatedId);
+      if (sideIndex === -1) return;
+
+      const oldRating = payload.old?.smash_rating;
+      const newRating = payload.new?.smash_rating;
+      if (typeof oldRating !== 'number' || typeof newRating !== 'number') return;
+      const delta = Math.round((newRating - oldRating) * 100) / 100;
+      if (delta === 0) return;
+
+      const side = sideIndex === 0 ? 'left' : 'right';
+      deltaCounter.current += 1;
+      setDeltas((prev) => ({ ...prev, [side]: { id: deltaCounter.current, value: delta } }));
+      setPair((prev) =>
+        prev ? prev.map((c, i) => (i === sideIndex ? { ...c, smashRating: newRating } : c)) : prev
+      );
+      setTimeout(() => {
+        setDeltas((prev) => ({ ...prev, [side]: null }));
+      }, 1100);
+    });
+    return unsubscribe;
   }, []);
 
   if (loading && !pair) {
