@@ -144,7 +144,7 @@ export function Arena() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col items-center gap-8 px-4 py-10">
       <div className="text-center">
-        <h1 className="font-display text-4xl font-black text-neutral-50 sm:text-5xl">NameMash by rukawa_229</h1>
+        <h1 className="font-display text-4xl font-black text-neutral-50 sm:text-5xl">NameMash by rukawa_229 PLEASE DO NOT SHARE THIS TO FEMALES</h1>
         <p className="mt-2 text-neutral-400">Which one gets the Smash?</p>
       </div>
 
