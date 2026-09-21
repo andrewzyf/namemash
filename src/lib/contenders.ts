@@ -52,7 +52,7 @@ export async function seedRosterIfEmpty(): Promise<number> {
     .select('id', { count: 'exact', head: true });
 
   if (countError) throw new Error(countError.message);
-  if ((count ?? 0) > 0) return 0;
+  if ((count ?? 0) > 0 || seedRoster.length === 0) return 0;
 
   const { error } = await supabase.from('contenders').insert(seedRoster);
   if (error) throw new Error(error.message);
