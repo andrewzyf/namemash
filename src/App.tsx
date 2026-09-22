@@ -30,7 +30,7 @@ export default function App() {
 
       <header className="border-b border-neutral-800 bg-neutral-950/80 backdrop-blur">
         <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <span className="font-display text-xl font-black text-mash-gold">NameMash by Terra</span>
+          <span className="font-display text-xl font-black text-mash-gold">NameMash by TommyW</span>
           <div className="flex gap-1 rounded-full border border-neutral-800 p-1">
             {NAV.map((item) => (
               <button
