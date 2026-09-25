@@ -19,6 +19,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-neutral-950">
+      {!session && <AccessGate onVerified={setSession} />}
       {!accepted && (
         <TermsGate
           onAccept={() => {
