@@ -8,7 +8,12 @@ import { ContenderCard } from '../components/ContenderCard';
 
 type Delta = { id: number; value: number } | null;
 
-export function Arena() {
+interface ArenaProps {
+  voterCode?: string | null;
+  voterName?: string | null;
+}
+
+export function Arena({ voterCode = null, voterName = null }: ArenaProps) {
   const [pair, setPair] = useState<Contender[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [voting, setVoting] = useState(false);
@@ -54,7 +59,7 @@ export function Arena() {
       setPulsing(winnerIndex === 0 ? 'left' : 'right');
 
       try {
-        const result = await castVote(winner.id, loser.id);
+        const result = await castVote(winner.id, loser.id, voterCode, voterName);
         deltaCounter.current += 1;
         const id = deltaCounter.current;
         setDeltas({
@@ -74,7 +79,7 @@ export function Arena() {
         setPulsing(null);
       }
     },
-    [pair, voting, loadPair]
+    [pair, voting, loadPair, voterCode, voterName]
   );
 
   const skip = useCallback(() => {
