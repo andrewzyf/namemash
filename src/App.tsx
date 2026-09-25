@@ -3,7 +3,9 @@ import { Arena } from './pages/Arena';
 import { Leaderboard } from './pages/Leaderboard';
 import { Admin } from './pages/Admin';
 import { TermsGate } from './components/TermsGate';
+import { AccessGate } from './components/AccessGate';
 import { hasAcceptedTerms, setAcceptedTerms } from './lib/terms';
+import { getSession, clearSession, type AuthSession } from './lib/auth';
 
 type View = 'arena' | 'leaderboard' | 'admin';
 
@@ -16,10 +18,13 @@ const NAV: { key: View; label: string }[] = [
 export default function App() {
   const [view, setView] = useState<View>('arena');
   const [accepted, setAccepted] = useState(hasAcceptedTerms());
+  const [session, setSession] = useState<AuthSession | null>(getSession());
 
   return (
     <div className="min-h-screen bg-neutral-950">
-      {!accepted && (
+      {!session && <AccessGate onVerified={setSession} />}
+
+      {session && !accepted && (
         <TermsGate
           onAccept={() => {
             setAcceptedTerms();
@@ -48,10 +53,27 @@ export default function App() {
       </header>
 
       <main>
-        {view === 'arena' && <Arena />}
+        {view === 'arena' && <Arena voterCode={session?.code ?? null} voterName={session?.assignedTo ?? null} />}
         {view === 'leaderboard' && <Leaderboard />}
         {view === 'admin' && <Admin />}
       </main>
+
+      {session && (
+        <footer className="mx-auto flex max-w-5xl items-center justify-center gap-3 px-4 py-6 text-xs text-neutral-500">
+          <span>
+            Logged in as: <span className="text-neutral-300">{session.assignedTo}</span>
+          </span>
+          <button
+            onClick={() => {
+              clearSession();
+              setSession(null);
+            }}
+            className="rounded-full border border-neutral-800 px-3 py-1 text-neutral-400 transition hover:border-neutral-600 hover:text-neutral-200"
+          >
+            Switch Code / Log out
+          </button>
+        </footer>
+      )}
     </div>
   );
 }

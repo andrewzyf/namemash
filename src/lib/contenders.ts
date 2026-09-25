@@ -21,10 +21,17 @@ export function extractCategories(items: Contender[]): string[] {
   return [...set].sort();
 }
 
-export async function castVote(winnerId: string, loserId: string): Promise<SmashResult> {
+export async function castVote(
+  winnerId: string,
+  loserId: string,
+  voterCode: string | null = null,
+  voterName: string | null = null
+): Promise<SmashResult> {
   const { data, error } = await supabase.rpc('record_smash', {
     winner_id: winnerId,
     loser_id: loserId,
+    voter_code: voterCode,
+    voter_name: voterName,
   });
   if (error) throw new Error(error.message);
   return data as SmashResult;
