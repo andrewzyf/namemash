@@ -5,7 +5,7 @@ import { Admin } from './pages/Admin';
 import { TermsGate } from './components/TermsGate';
 import { AccessGate } from './components/AccessGate';
 import { hasAcceptedTerms, setAcceptedTerms } from './lib/terms';
-import { getSession, clearSession, type SessionData } from './lib/auth';
+import { getSession, clearSession, type AuthSession } from './lib/auth';
 
 type View = 'arena' | 'leaderboard' | 'admin';
 
@@ -18,7 +18,7 @@ const NAV: { key: View; label: string }[] = [
 export default function App() {
   const [view, setView] = useState<View>('arena');
   const [accepted, setAccepted] = useState(hasAcceptedTerms());
-  const [session, setSession] = useState<SessionData | null>(getSession());
+  const [session, setSession] = useState<AuthSession | null>(getSession());
 
   return (
     <div className="min-h-screen bg-neutral-950 flex flex-col">
@@ -60,7 +60,7 @@ export default function App() {
 
       <main className="max-w-5xl mx-auto px-4 py-8 flex-1 w-full">
         {view === 'arena' && (
-          <Arena voterCode={session?.code} voterName={session?.assigned_to} />
+          <Arena voterCode={session?.code} voterName={session?.assignedTo} />
         )}
         {view === 'leaderboard' && <Leaderboard />}
         {view === 'admin' && <Admin />}
@@ -68,7 +68,7 @@ export default function App() {
 
       {session && (
         <footer className="border-t border-neutral-900 py-3 px-4 text-center text-xs text-neutral-500 flex items-center justify-center gap-3">
-          <span>Logged in as: <strong className="text-neutral-300">{session.assigned_to}</strong></span>
+          <span>Logged in as: <strong className="text-neutral-300">{session.assignedTo}</strong></span>
           <button
             onClick={() => {
               clearSession();
