@@ -5,7 +5,7 @@ import { Admin } from './pages/Admin';
 import { TermsGate } from './components/TermsGate';
 import { AccessGate } from './components/AccessGate';
 import { hasAcceptedTerms, setAcceptedTerms } from './lib/terms';
-import { getSession, clearSession, type AuthSession } from './lib/auth';
+import { getSession, clearSession, type SessionData } from './lib/auth';
 
 type View = 'arena' | 'leaderboard' | 'admin';
 
@@ -18,13 +18,12 @@ const NAV: { key: View; label: string }[] = [
 export default function App() {
   const [view, setView] = useState<View>('arena');
   const [accepted, setAccepted] = useState(hasAcceptedTerms());
-  const [session, setSession] = useState<AuthSession | null>(getSession());
+  const [session, setSession] = useState<SessionData | null>(getSession());
 
   return (
-    <div className="min-h-screen bg-neutral-950">
+    <div className="min-h-screen bg-neutral-950 flex flex-col">
       {!session && <AccessGate onVerified={setSession} />}
-
-      {session && !accepted && (
+      {!accepted && (
         <TermsGate
           onAccept={() => {
             setAcceptedTerms();
@@ -33,42 +32,49 @@ export default function App() {
         />
       )}
 
-      <header className="border-b border-neutral-800 bg-neutral-950/80 backdrop-blur">
-        <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
-          <span className="font-display text-xl font-black text-mash-gold">NameMash by TommyW</span>
-          <div className="flex gap-1 rounded-full border border-neutral-800 p-1">
-            {NAV.map((item) => (
+      <header className="border-b border-neutral-800 bg-neutral-900/50 backdrop-blur sticky top-0 z-40">
+        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-xl font-black tracking-tight text-white">
+              NAME<span className="text-rose-500">MASH</span>
+            </span>
+          </div>
+
+          <nav className="flex items-center gap-1 bg-neutral-900 border border-neutral-800 p-1 rounded-lg">
+            {NAV.map((n) => (
               <button
-                key={item.key}
-                onClick={() => setView(item.key)}
-                className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
-                  view === item.key ? 'bg-mash-red text-white' : 'text-neutral-400 hover:text-neutral-100'
+                key={n.key}
+                onClick={() => setView(n.key)}
+                className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
+                  view === n.key
+                    ? 'bg-rose-500 text-white'
+                    : 'text-neutral-400 hover:text-white'
                 }`}
               >
-                {item.label}
+                {n.label}
               </button>
             ))}
-          </div>
-        </nav>
+          </nav>
+        </div>
       </header>
 
-      <main>
-        {view === 'arena' && <Arena voterCode={session?.code ?? null} voterName={session?.assignedTo ?? null} />}
+      <main className="max-w-5xl mx-auto px-4 py-8 flex-1 w-full">
+        {view === 'arena' && (
+          <Arena voterCode={session?.code} voterName={session?.assigned_to} />
+        )}
         {view === 'leaderboard' && <Leaderboard />}
         {view === 'admin' && <Admin />}
       </main>
 
       {session && (
-        <footer className="mx-auto flex max-w-5xl items-center justify-center gap-3 px-4 py-6 text-xs text-neutral-500">
-          <span>
-            Logged in as: <span className="text-neutral-300">{session.assignedTo}</span>
-          </span>
+        <footer className="border-t border-neutral-900 py-3 px-4 text-center text-xs text-neutral-500 flex items-center justify-center gap-3">
+          <span>Logged in as: <strong className="text-neutral-300">{session.assigned_to}</strong></span>
           <button
             onClick={() => {
               clearSession();
               setSession(null);
             }}
-            className="rounded-full border border-neutral-800 px-3 py-1 text-neutral-400 transition hover:border-neutral-600 hover:text-neutral-200"
+            className="text-neutral-400 hover:text-rose-400 underline transition-colors"
           >
             Switch Code / Log out
           </button>
